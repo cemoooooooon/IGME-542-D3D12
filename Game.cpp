@@ -109,13 +109,37 @@ void Game::CreateRootSigAndPipelineState()
 		rootParam.DescriptorTable.NumDescriptorRanges = 1;
 		rootParam.DescriptorTable.pDescriptorRanges = &cbvTable;
 
+		// New root params for the pixel shader
+		D3D12_ROOT_PARAMETER psRootParam = {};
+		psRootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		psRootParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		psRootParam.DescriptorTable.NumDescriptorRanges = 1;
+		psRootParam.DescriptorTable.pDescriptorRanges = &cbvTable;
+
+		D3D12_ROOT_PARAMETER rootParams[] = { rootParam, psRootParam };
+
+		// Create a single static sampler for allll the pixel shaders
+		D3D12_STATIC_SAMPLER_DESC anisoWrap = {};
+		anisoWrap.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		anisoWrap.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		anisoWrap.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		anisoWrap.Filter = D3D12_FILTER_ANISOTROPIC;
+		anisoWrap.MaxAnisotropy = 16;
+		anisoWrap.MaxLOD = D3D12_FLOAT32_MAX;
+		anisoWrap.ShaderRegister = 0; // Means register(s0) in the shader
+		anisoWrap.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+		D3D12_STATIC_SAMPLER_DESC samplers[] = { anisoWrap };
+
 		// Describe the overall the root signature
 		D3D12_ROOT_SIGNATURE_DESC rootSig = {};
-		rootSig.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-		rootSig.NumParameters = 1;
-		rootSig.pParameters = &rootParam;
-		rootSig.NumStaticSamplers = 0;
-		rootSig.pStaticSamplers = 0;
+		rootSig.Flags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+			D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+		rootSig.NumParameters = ARRAYSIZE(rootParams);
+		rootSig.pParameters = rootParams;
+		rootSig.NumStaticSamplers = ARRAYSIZE(samplers);
+		rootSig.pStaticSamplers = samplers;
+
 		ID3DBlob* serializedRootSig = 0;
 		ID3DBlob* errors = 0;
 		D3D12SerializeRootSignature(
@@ -228,11 +252,53 @@ void Game::CreateGeometry()
 	std::shared_ptr<Mesh> quad2Side = std::make_shared<Mesh>(FixPath(L"../../Assets/Models/quad_double_sided.obj").c_str());
 	std::shared_ptr<Mesh> can = std::make_shared<Mesh>(FixPath(L"../../Assets/Models/can.obj").c_str());
 
+	// Load in textures
+
+	// rock
+	unsigned int rockAlbedo = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/rock/albedo.jpg").c_str());
+	unsigned int rockNormal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/rock/normal.jpg").c_str());
+	unsigned int rockMetal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/rock/metalness.png").c_str());
+	unsigned int rockRoughness = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/rock/roughness.jpg").c_str());
+
+	// marble
+	unsigned int marbleAlbedo = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/marble/albedo.jpg").c_str());
+	unsigned int marbleNormal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/marble/normal.jpg").c_str());
+	unsigned int marbleMetal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/marble/metalness.png").c_str());
+	unsigned int marbleRoughness = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/marble/roughness.jpg").c_str());
+
+	// wood
+	unsigned int woodAlbedo = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/wood/albedo.jpg").c_str());
+	unsigned int woodNormal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/wood/normal.jpg").c_str());
+	unsigned int woodMetal = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/wood/metalness.png").c_str());
+	unsigned int woodRoughness = Graphics::LoadTexture(FixPath(L"../../Assets/Textures/wood/roughness.jpg").c_str());
+
+	// Make them textures
+	std::shared_ptr<Material> rockMaterial = std::make_shared<Material>(
+		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
+		DirectX::XMFLOAT2(1.0f, 1.0f),
+		DirectX::XMFLOAT2(0.0f, 0.0f),
+		pipelineState, rockAlbedo, rockNormal, rockMetal, rockRoughness
+	);
+
+	std::shared_ptr<Material> marbleMaterial = std::make_shared<Material>(
+		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
+		DirectX::XMFLOAT2(1.0f, 1.0f),
+		DirectX::XMFLOAT2(0.0f, 0.0f),
+		pipelineState, marbleAlbedo, marbleNormal, marbleMetal, marbleRoughness
+	);
+
+	std::shared_ptr<Material> woodMaterial = std::make_shared<Material>(
+		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
+		DirectX::XMFLOAT2(1.0f, 1.0f),
+		DirectX::XMFLOAT2(0.0f, 0.0f),
+		pipelineState,woodAlbedo,woodNormal, woodMetal, woodRoughness
+	);
+
 	// Actual entities
-	std::shared_ptr<GameEntity> canEntity = std::make_shared<GameEntity>(can);
-	std::shared_ptr<GameEntity> sphereEntity = std::make_shared<GameEntity>(sphere);
-	std::shared_ptr<GameEntity> torusEntity = std::make_shared<GameEntity>(torus);
-	std::shared_ptr<GameEntity> cubeEntity = std::make_shared<GameEntity>(cube);
+	std::shared_ptr<GameEntity> canEntity = std::make_shared<GameEntity>(can, marbleMaterial);
+	std::shared_ptr<GameEntity> sphereEntity = std::make_shared<GameEntity>(sphere, rockMaterial);
+	std::shared_ptr<GameEntity> torusEntity = std::make_shared<GameEntity>(torus, woodMaterial);
+	std::shared_ptr<GameEntity> cubeEntity = std::make_shared<GameEntity>(cube, rockMaterial);
 
 	canEntity->GetTransform()->SetPosition(-3.0f, 0.0f, 0.0f);
 	sphereEntity->GetTransform()->SetPosition(-1.0f, 0.0f, 0.0f);
@@ -246,6 +312,46 @@ void Game::CreateGeometry()
 	entities.push_back(sphereEntity);
 	entities.push_back(torusEntity);
 	entities.push_back(cubeEntity);
+
+	// Create lights
+	directionalLight = {};
+	directionalLight.type = LIGHT_TYPE_DIRECTIONAL;
+	directionalLight.direction = XMFLOAT3(0.0f, -1.0f, 0.0f);
+	directionalLight.range = 8.0f;
+	directionalLight.position = XMFLOAT3(0.0f, 6.0f, 0.0f);
+	directionalLight.intensity = 2.6f;
+	directionalLight.color = XMFLOAT3(0.23f, 0.87f, 0.33f);
+
+	directionalLight2 = {};
+	directionalLight2.type = LIGHT_TYPE_DIRECTIONAL;
+	directionalLight2.direction = XMFLOAT3(1.0f, -0.75f, 0.0f);
+	directionalLight2.range = 4.0f;
+	directionalLight2.position = XMFLOAT3(-4.8f, 2.38f, 0.0f);
+	directionalLight2.intensity = 1.3f;
+	directionalLight2.color = XMFLOAT3(0.8f, 0.0f, 0.0f);
+
+	spotLight = {};
+	spotLight.type = LIGHT_TYPE_SPOT;
+	spotLight.direction = XMFLOAT3(0.0f, 0.0f, 1.0f);
+	spotLight.range = 6.0f;
+	spotLight.position = XMFLOAT3(0.0f, 0.0f, -3.0f);
+	spotLight.intensity = 2.2f;
+	spotLight.spotInnerAngle = 28.0f;
+	spotLight.spotOuterAngle = 39.5f;
+	spotLight.color = XMFLOAT3(0.2f, 0.7f, 0.0f);
+
+	pointLight = {};
+	pointLight.type = LIGHT_TYPE_POINT;
+	pointLight.range = 3.0f;
+	pointLight.position = XMFLOAT3(2.0f, 4.8f, -1.3f);
+	pointLight.intensity = 1.55f;
+	pointLight.color = XMFLOAT3(0.0f, 0.0f, 1.0f);
+
+
+	lights.push_back(directionalLight);
+	lights.push_back(directionalLight2);
+	lights.push_back(spotLight);
+	lights.push_back(pointLight);
 }
 
 
@@ -325,7 +431,7 @@ void Game::Draw(float deltaTime, float totalTime)
 		Graphics::CommandList->ResourceBarrier(1, &rb);
 
 		// Background color (Cornflower Blue in this case) for clearing
-		float color[] = { 0.4f, 0.6f, 0.75f, 1.0f };
+		float color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
 		// Clear the RTV
 		Graphics::CommandList->ClearRenderTargetView(
@@ -346,6 +452,8 @@ void Game::Draw(float deltaTime, float totalTime)
 	{
 		// Set overall pipeline state
 		Graphics::CommandList->SetPipelineState(pipelineState.Get());
+		// Descriptor heap set up
+		Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
 		// Root sig (must happen before root descriptor table)
 		Graphics::CommandList->SetGraphicsRootSignature(rootSignature.Get());
 		// Set up other commands for rendering
@@ -355,17 +463,30 @@ void Game::Draw(float deltaTime, float totalTime)
 		Graphics::CommandList->RSSetScissorRects(1, &scissorRect);
 		Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		
-		// Descriptor heap set up
-		Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
-
 		// Draw what we have made
 		for (auto& e : entities)
 		{
+			// Access material for easy use
+			std::shared_ptr<Material> m = e->GetMaterial();
+
 			// Fill out struct to send to the vertex shader
 			VertexShaderExternalData cbData = {};
 			cbData.world = e->GetTransform()->GetWorldMatrix();
 			cbData.view = camera->GetViewMatrix();
 			cbData.projection = camera->GetProjectionMatrix();
+			cbData.worldInverseTranspose = e->GetTransform()->GetWorldInverseTransposeMatrix();
+
+			// Fill out struct to send to pixel shader
+			PixelShaderExternalData psData = {};
+			psData.albedoIndex = m->GetAlbedo();
+			psData.metalIndex = m->GetMetalness();
+			psData.normalIndex = m->GetNormalMap();
+			psData.roughnessIndex = m->GetRoughness();
+			psData.uvOffset = m->GetUVOffset();
+			psData.uvScale = m->GetUVScale();
+			psData.camPos = camera->GetTransform()->GetPosition();
+			psData.lightCount = numLights;
+			memcpy(&psData.lights, &lights[0], sizeof(Light) * numLights);
 
 			// Copy the struct data over to the gpu
 			D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&cbData, sizeof(cbData));
@@ -377,9 +498,16 @@ void Game::Draw(float deltaTime, float totalTime)
 			D3D12_VERTEX_BUFFER_VIEW vbView = e->GetMesh()->GetVertexBufferView();
 			D3D12_INDEX_BUFFER_VIEW ibView = e->GetMesh()->GetIndexBufferView();
 
+			// its pixel shader's turn for the gpu handle!!
+			gpuHandle = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&psData, sizeof(psData));
+			Graphics::CommandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+
 			// Set both buffers
 			Graphics::CommandList->IASetVertexBuffers(0, 1, &vbView);
 			Graphics::CommandList->IASetIndexBuffer(&ibView);
+
+			// Change to the entities pso
+			Graphics::CommandList->SetPipelineState(m->GetPipelineState().Get());
 
 			// Finally call draw indexed
 			Graphics::CommandList->DrawIndexedInstanced(e->GetMesh()->GetIndexCount(), 1, 0, 0, 0);

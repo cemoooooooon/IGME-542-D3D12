@@ -67,6 +67,10 @@ namespace Graphics
 	void CloseAndExecuteCommandList();
 	void WaitForGPU();
 
+	// Maximum number of texture descriptors (SRVs) we can have.
+	const unsigned int MaxTextureDescriptors = 100;
+	unsigned int LoadTexture(const wchar_t* file, bool generateMips = true);
+
 	// --- FUNCTIONS ---
 
 	// Getters

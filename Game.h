@@ -4,6 +4,7 @@
 #include <wrl/client.h>
 #include "Camera.h"
 #include "GameEntity.h"
+#include "Lights.h"
 #include <memory>
 #include <vector>
 
@@ -47,5 +48,13 @@ private:
 	// Variables
 	std::shared_ptr<Camera> camera;
 	std::vector<std::shared_ptr<GameEntity>> entities;
+
+	// light it up up up!
+	unsigned int numLights = 4;
+	Light directionalLight;
+	Light directionalLight2;
+	Light spotLight;
+	Light pointLight;
+	std::vector<Light> lights;
 };
 
