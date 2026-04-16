@@ -104,14 +104,28 @@ void RayTracing::CreateRaytracingRootSignatures()
 			rootParams[0].Constants.ShaderRegister = 0;
 		}
 
+		// Create a sampler for textures
+		D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+		samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		samplerDesc.Filter = D3D12_FILTER_ANISOTROPIC;
+		samplerDesc.MaxAnisotropy = 16;
+		samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+		samplerDesc.ShaderRegister = 0;
+		samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		// Array of samplers
+		D3D12_STATIC_SAMPLER_DESC samplers[] = { samplerDesc };
+
 		// Create the global root signature
 		Microsoft::WRL::ComPtr<ID3DBlob> blob;
 		Microsoft::WRL::ComPtr<ID3DBlob> errors;
 		D3D12_ROOT_SIGNATURE_DESC globalRootSigDesc = {};
 		globalRootSigDesc.NumParameters = ARRAYSIZE(rootParams);
 		globalRootSigDesc.pParameters = rootParams;
-		globalRootSigDesc.NumStaticSamplers = 0;
-		globalRootSigDesc.pStaticSamplers = 0;
+		globalRootSigDesc.NumStaticSamplers = ARRAYSIZE(samplers);
+		globalRootSigDesc.pStaticSamplers = samplers;
 		globalRootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
 
 		D3D12SerializeRootSignature(&globalRootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, blob.GetAddressOf(), errors.GetAddressOf());
@@ -216,7 +230,8 @@ void RayTracing::CreateRaytracingPipelineState(std::wstring raytracingShaderLibr
 
 	// === Shader config (payload) ===
 	D3D12_RAYTRACING_SHADER_CONFIG shaderConfigDesc = {};
-	shaderConfigDesc.MaxPayloadSizeInBytes = sizeof(DirectX::XMFLOAT3);	// Assuming a float3 color for now
+	shaderConfigDesc.MaxPayloadSizeInBytes = 
+		sizeof(DirectX::XMFLOAT3) + (2 * sizeof(unsigned int));	// Assuming a float3 color for now
 	shaderConfigDesc.MaxAttributeSizeInBytes = sizeof(DirectX::XMFLOAT2); // Assuming a float2 for barycentric coords for now
 
 	D3D12_STATE_SUBOBJECT shaderConfigSubObj = {};
@@ -432,6 +447,7 @@ void RayTracing::CreateEntityDataBuffer(std::vector<std::shared_ptr<GameEntity>>
 		data.Color = DirectX::XMFLOAT4(c.x, c.y, c.z, 1);
 		data.IndexBufferDescriptorIndex = Graphics::GetDescriptorIndex(scene[i]->GetMesh()->GetRayTracingData().IndexBufferSRV);
 		data.VertexBufferDescriptorIndex = Graphics::GetDescriptorIndex(scene[i]->GetMesh()->GetRayTracingData().VertexBufferSRV);
+		data.AlbedoIndex = scene[i]->GetMaterial()->GetAlbedo();
 
 		entityData.push_back(data);
 	}
@@ -759,8 +775,9 @@ void RayTracing::Raytrace(std::shared_ptr<Camera> camera, Microsoft::WRL::ComPtr
 	}
 
 	// Grab and fill a constant buffer
-	RaytracingSceneData sceneData = {};
+	RayTracingSceneData sceneData = {};
 	sceneData.CameraPosition = camera->GetTransform()->GetPosition();
+	sceneData.RaysPerPixel = 5;
 
 	DirectX::XMFLOAT4X4 view = camera->GetViewMatrix();
 	DirectX::XMFLOAT4X4 proj = camera->GetProjectionMatrix();
@@ -769,7 +786,7 @@ void RayTracing::Raytrace(std::shared_ptr<Camera> camera, Microsoft::WRL::ComPtr
 	DirectX::XMMATRIX vp = DirectX::XMMatrixMultiply(v, p);
 	DirectX::XMStoreFloat4x4(&sceneData.InverseViewProjection, XMMatrixInverse(0, vp));
 
-	D3D12_GPU_DESCRIPTOR_HANDLE cbuffer = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&sceneData, sizeof(RaytracingSceneData));
+	D3D12_GPU_DESCRIPTOR_HANDLE cbuffer = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&sceneData, sizeof(RayTracingSceneData));
 
 	// ACTUAL RAYTRACING HERE
 	{

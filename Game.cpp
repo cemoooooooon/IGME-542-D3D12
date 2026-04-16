@@ -324,8 +324,8 @@ void Game::CreateGeometry()
 			XMFLOAT2(1.0f, 1.0f),
 			XMFLOAT2(0.0f, 0.0f),
 			pipelineState,
-			0,
-			0,
+			marbleAlbedo,
+			marbleNormal,
 			0,
 			0);
 
