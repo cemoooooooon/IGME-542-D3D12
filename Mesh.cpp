@@ -277,11 +277,31 @@ void Mesh::CreateBuffer(Vertex* vertices, unsigned int* indices, size_t vertexCo
 	indexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	indexBufferView.SizeInBytes = (UINT)(sizeof(unsigned int) * indexCount);
 	indexBufferView.BufferLocation = indexBuffer->GetGPUVirtualAddress();
+
+	// srv for vertex buffers
+	D3D12_CPU_DESCRIPTOR_HANDLE vbCPU;
+	Graphics::ReserveDescriptorHeapSlot(&vbCPU, &vbGPUDescriptorHandle);
+
+	// srv desc
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Buffer.FirstElement = 0;
+	srvDesc.Buffer.NumElements = (unsigned int)vertexCount;
+	srvDesc.Buffer.StructureByteStride = sizeof(Vertex);
+	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+	Graphics::Device->CreateShaderResourceView(vertexBuffer.Get(), &srvDesc, vbCPU);
 }
 
 D3D12_VERTEX_BUFFER_VIEW Mesh::GetVertexBufferView()
 {
 	return vertexBufferView;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE Mesh::GetVertexBufferDescriptorHandle()
+{
+	return vbGPUDescriptorHandle;
 }
 
 D3D12_INDEX_BUFFER_VIEW Mesh::GetIndexBufferView()

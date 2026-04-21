@@ -54,6 +54,7 @@ namespace Graphics
 
 	// Getters
 	unsigned int SwapChainIndex();
+	unsigned int GetDescriptorIndex(D3D12_GPU_DESCRIPTOR_HANDLE handle);
 
 	// General functions
 	void AdvanceSwapChainIndex();
@@ -77,10 +78,22 @@ namespace Graphics
 	bool VsyncState();
 	std::wstring APIName();
 
+	// helper for cubemap
+	unsigned int CreateCubemap(
+		const wchar_t* right,
+		const wchar_t* left,
+		const wchar_t* up,
+		const wchar_t* down,
+		const wchar_t* front,
+		const wchar_t* back);
+
 	// General functions
 	HRESULT Initialize(unsigned int windowWidth, unsigned int windowHeight, HWND windowHandle, bool vsyncIfPossible);
 	void ShutDown();
 	void ResizeBuffers(unsigned int width, unsigned int height);
+	void ReserveDescriptorHeapSlot(
+		D3D12_CPU_DESCRIPTOR_HANDLE* cpuHandle,
+		D3D12_GPU_DESCRIPTOR_HANDLE* gpuHandle);
 
 	// Debug Layer
 	void PrintDebugMessages();

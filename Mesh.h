@@ -13,6 +13,7 @@ public:
 
 	void CreateBuffer(Vertex* vertices, unsigned int* indices, size_t vertexCount, size_t indexCount);
 	D3D12_VERTEX_BUFFER_VIEW GetVertexBufferView();
+	D3D12_GPU_DESCRIPTOR_HANDLE GetVertexBufferDescriptorHandle();
 	D3D12_INDEX_BUFFER_VIEW GetIndexBufferView();
 	int GetIndexCount();
 	int GetVertexCount();
@@ -24,6 +25,7 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> indexBuffer;
 
 	D3D12_VERTEX_BUFFER_VIEW vertexBufferView;
+	D3D12_GPU_DESCRIPTOR_HANDLE vbGPUDescriptorHandle;
 	D3D12_INDEX_BUFFER_VIEW indexBufferView;
 
 	int indexCount;

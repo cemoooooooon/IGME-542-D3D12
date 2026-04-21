@@ -7,6 +7,7 @@
 #include "Lights.h"
 #include <memory>
 #include <vector>
+#include "Sky.h"
 
 class Game
 {
@@ -48,6 +49,9 @@ private:
 	// Variables
 	std::shared_ptr<Camera> camera;
 	std::vector<std::shared_ptr<GameEntity>> entities;
+
+	// sky stuff!
+	std::shared_ptr<Sky> sky;
 
 	// light it up up up!
 	unsigned int numLights = 4;

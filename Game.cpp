@@ -352,6 +352,16 @@ void Game::CreateGeometry()
 	lights.push_back(directionalLight2);
 	lights.push_back(spotLight);
 	lights.push_back(pointLight);
+
+	// create a sky
+	sky = std::make_shared<Sky>(
+		FixPath(L"../../Assets/Textures/Sky/right.png").c_str(),
+		FixPath(L"../../Assets/Textures/Sky/left.png").c_str(),
+		FixPath(L"../../Assets/Textures/Sky/up.png").c_str(),
+		FixPath(L"../../Assets/Textures/Sky/down.png").c_str(),
+		FixPath(L"../../Assets/Textures/Sky/front.png").c_str(),
+		FixPath(L"../../Assets/Textures/Sky/back.png").c_str(),
+		cube);
 }
 
 
@@ -513,6 +523,9 @@ void Game::Draw(float deltaTime, float totalTime)
 			Graphics::CommandList->DrawIndexedInstanced(e->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
 		}
 	}
+
+	// render sky before presenting
+	sky->Draw(camera);
 
 	// Present
 	{

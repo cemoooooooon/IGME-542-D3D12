@@ -1,5 +1,6 @@
 #pragma once
 #include <DirectXMath.h>
+#include "Lights.h"
 
 struct VertexShaderExternalData
 {
@@ -20,4 +21,11 @@ struct PixelShaderExternalData
 	DirectX::XMFLOAT3 camPos;
 	unsigned int lightCount;
 	Light lights[4];
+};
+
+// simplified struct that will send data for skyboxes
+struct PerFrameData
+{
+	DirectX::XMFLOAT4X4 view;
+	DirectX::XMFLOAT4X4 projection;
 };
