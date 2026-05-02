@@ -144,6 +144,52 @@ std::wstring Graphics::APIName()
 	}
 }
 
+TextureDetails Graphics::CreateTexture(unsigned int width, unsigned int height, unsigned int arraySize, unsigned int mipLevels, D3D12_RESOURCE_FLAGS flags, DXGI_FORMAT colorFormat, float clearColorR, float clearColorG, float clearColorB, float clearColorA)
+{
+	// set up heap for resources
+	D3D12_HEAP_PROPERTIES props = {};
+	props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	props.CreationNodeMask = 1;
+	props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	props.Type = D3D12_HEAP_TYPE_DEFAULT;
+	props.VisibleNodeMask = 1;
+
+	D3D12_RESOURCE_DESC desc = {};
+	desc.Alignment = 0;
+	desc.DepthOrArraySize = arraySize;
+	desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	desc.Flags = flags;
+	desc.Format = colorFormat;
+	desc.Height = height;
+	desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	desc.MipLevels = mipLevels;
+	desc.SampleDesc.Count = 1;
+	desc.SampleDesc.Quality = 0;
+	desc.Width = width;
+
+	// default clear color
+	D3D12_CLEAR_VALUE clear{};
+	clear.Color[0] = clearColorR;
+	clear.Color[1] = clearColorG;
+	clear.Color[2] = clearColorB;
+	clear.Color[3] = clearColorA;
+	clear.Format = colorFormat;
+
+	Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+	Graphics::Device->CreateCommittedResource(
+		&props,
+		D3D12_HEAP_FLAG_NONE,
+		&desc,
+		D3D12_RESOURCE_STATE_COMMON,
+		&clear,
+		IID_PPV_ARGS(texture.GetAddressOf()));
+
+	TextureDetails details;
+	details.Texture = texture;
+
+	return details;
+}
+
 unsigned int Graphics::CreateCubemap(const wchar_t* right, const wchar_t* left, const wchar_t* up, const wchar_t* down, const wchar_t* front, const wchar_t* back)
 {
 	// Temporary textures

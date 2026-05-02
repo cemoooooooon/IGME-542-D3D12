@@ -9,6 +9,22 @@
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
+struct DescriptorDetails
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE CPUHandle{};
+	D3D12_GPU_DESCRIPTOR_HANDLE GPUHandle{};
+	unsigned int GPUDescriptorIndex = -1;
+};
+
+// struct object for textures (used for render targets)
+struct TextureDetails
+{
+	Microsoft::WRL::ComPtr<ID3D12Resource> Texture;
+	DescriptorDetails SRV;
+	DescriptorDetails UAV;
+	D3D12_CPU_DESCRIPTOR_HANDLE RTV{};
+};
+
 namespace Graphics
 {
 	// --- CONSTANTS ---
@@ -77,6 +93,18 @@ namespace Graphics
 	// Getters
 	bool VsyncState();
 	std::wstring APIName();
+
+	TextureDetails CreateTexture(
+		unsigned int width,
+		unsigned int height,
+		unsigned int arraySize = 1,
+		unsigned int mipLevels = 1,
+		D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
+		DXGI_FORMAT colorFormat = DXGI_FORMAT_R8G8B8A8_UNORM,
+		float clearColorR = 0.0f,
+		float clearColorG = 0.0f,
+		float clearColorB = 0.0f,
+		float clearColorA = 1.0f);
 
 	// helper for cubemap
 	unsigned int CreateCubemap(

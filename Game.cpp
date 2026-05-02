@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "Graphics.h"
 #include "Vertex.h"
 #include "Input.h"
 #include "PathHelpers.h"
@@ -59,6 +58,10 @@ void Game::CreateRootSigAndPipelineState()
 	// Blobs to hold raw shader byte code used in several steps below
 	Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderByteCode;
 	Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderByteCode;
+	Microsoft::WRL::ComPtr<ID3DBlob> refractionPS;
+
+	Microsoft::WRL::ComPtr<ID3DBlob> fullscreenVS;
+	Microsoft::WRL::ComPtr<ID3DBlob> simplePS;
 
 	// Load shaders
 	{
@@ -68,6 +71,13 @@ void Game::CreateRootSigAndPipelineState()
 			FixPath(L"VertexShader.cso").c_str(), vertexShaderByteCode.GetAddressOf());
 		D3DReadFileToBlob(
 			FixPath(L"PixelShader.cso").c_str(), pixelShaderByteCode.GetAddressOf());
+		D3DReadFileToBlob(
+			FixPath(L"RefractionPS.cso").c_str(), refractionPS.GetAddressOf());
+
+		D3DReadFileToBlob(
+			FixPath(L"Fullscreen.cso").c_str(), fullscreenVS.GetAddressOf());
+		D3DReadFileToBlob(
+			FixPath(L"SimpleTexturePS.cso").c_str(), simplePS.GetAddressOf());
 	}
 
 	// Input layout
@@ -128,7 +138,19 @@ void Game::CreateRootSigAndPipelineState()
 		anisoWrap.MaxLOD = D3D12_FLOAT32_MAX;
 		anisoWrap.ShaderRegister = 0; // Means register(s0) in the shader
 		anisoWrap.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-		D3D12_STATIC_SAMPLER_DESC samplers[] = { anisoWrap };
+
+		// create a clamp sampler
+		D3D12_STATIC_SAMPLER_DESC clampSampler = {};
+		clampSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		clampSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		clampSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		clampSampler.Filter = D3D12_FILTER_ANISOTROPIC;
+		clampSampler.MaxAnisotropy = 16;
+		clampSampler.MaxLOD = D3D12_FLOAT32_MAX;
+		clampSampler.ShaderRegister = 1; // Means register(s1) in the shader
+		clampSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+		D3D12_STATIC_SAMPLER_DESC samplers[] = { anisoWrap, clampSampler };
 
 		// Describe the overall the root signature
 		D3D12_ROOT_SIGNATURE_DESC rootSig = {};
@@ -184,8 +206,9 @@ void Game::CreateRootSigAndPipelineState()
 		psoDesc.PS.BytecodeLength = pixelShaderByteCode->GetBufferSize();
 
 		// -- Render targets ---
-		psoDesc.NumRenderTargets = 1;
+		psoDesc.NumRenderTargets = 2;
 		psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		psoDesc.RTVFormats[1] = DXGI_FORMAT_R8G8B8A8_UNORM;
 		psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		psoDesc.SampleDesc.Count = 1;
 		psoDesc.SampleDesc.Quality = 0;
@@ -210,6 +233,35 @@ void Game::CreateRootSigAndPipelineState()
 		Graphics::Device->CreateGraphicsPipelineState(
 			&psoDesc,
 			IID_PPV_ARGS(pipelineState.GetAddressOf()));
+
+		// create a full screen pso
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC fullscreenDesc = psoDesc;
+		fullscreenDesc.PS.BytecodeLength = simplePS->GetBufferSize();
+		fullscreenDesc.PS.pShaderBytecode = simplePS->GetBufferPointer();
+		fullscreenDesc.VS.BytecodeLength = fullscreenVS->GetBufferSize();
+		fullscreenDesc.VS.pShaderBytecode = fullscreenVS->GetBufferPointer();
+		fullscreenDesc.NumRenderTargets = 1;
+		fullscreenDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		fullscreenDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+		fullscreenDesc.DepthStencilState.DepthEnable = false;
+		fullscreenDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+		
+		Graphics::Device->CreateGraphicsPipelineState(
+			&fullscreenDesc,
+			IID_PPV_ARGS(fullscreenPSO.GetAddressOf()));
+
+		// create a refraction pso
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC refractDesc = psoDesc;
+		refractDesc.PS.pShaderBytecode = refractionPS->GetBufferPointer();
+		refractDesc.PS.BytecodeLength = refractionPS->GetBufferSize();
+		refractDesc.NumRenderTargets = 1;
+		refractDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+		refractDesc.RTVFormats[1] = DXGI_FORMAT_UNKNOWN;
+		refractDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+		Graphics::Device->CreateGraphicsPipelineState(
+			&refractDesc,
+			IID_PPV_ARGS(refractionPSO.GetAddressOf()));
 	}
 
 	// Set up the viewport and scissor rectangle
@@ -235,6 +287,52 @@ void Game::CreateRootSigAndPipelineState()
 		scissorRect.right = Window::Width();
 		scissorRect.bottom = Window::Height();
 	}
+
+	// need to set up two render targets
+	D3D12_DESCRIPTOR_HEAP_DESC dhDesc{};
+	dhDesc.NumDescriptors = 2;
+	dhDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	Graphics::Device->CreateDescriptorHeap(&dhDesc, IID_PPV_ARGS(rtvDescriptorHeap.GetAddressOf()));
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv_cpu_start = rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	unsigned int descSize = Graphics::Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	// create the two render targets
+	RenderTargets[0] = Graphics::CreateTexture(Window::Width(), Window::Height(), 1, 1, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+	RenderTargets[1] = Graphics::CreateTexture(Window::Width(), Window::Height(), 1, 1, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+
+	for (unsigned int i = 0; i < 2; i++)
+	{
+		RenderTargets[i].RTV = rtv_cpu_start;
+		RenderTargets[i].RTV.ptr += descSize * i;
+	}
+
+	// create the rtvs
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc{};
+	rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+	rtvDesc.Texture2D.MipSlice = 0;
+	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	// create rtvs on the heap
+	Graphics::Device->CreateRenderTargetView(RenderTargets[0].Texture.Get(), &rtvDesc, RenderTargets[0].RTV);
+	Graphics::Device->CreateRenderTargetView(RenderTargets[1].Texture.Get(), &rtvDesc, RenderTargets[1].RTV);
+
+	// srvs
+	D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+	srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srv.Texture2D.MipLevels = 1;
+	srv.Texture2D.MostDetailedMip = 0;
+	srv.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	for (unsigned int i = 0; i < 2; i++)
+		Graphics::ReserveDescriptorHeapSlot(&RenderTargets[i].SRV.CPUHandle, &RenderTargets[i].SRV.GPUHandle);
+
+	Graphics::Device->CreateShaderResourceView(RenderTargets[0].Texture.Get(), &srv, RenderTargets[0].SRV.CPUHandle);
+	Graphics::Device->CreateShaderResourceView(RenderTargets[1].Texture.Get(), &srv, RenderTargets[1].SRV.CPUHandle);
+
+	for (unsigned int i = 0; i < 2; i++)
+		RenderTargets[i].SRV.GPUDescriptorIndex = Graphics::GetDescriptorIndex(RenderTargets[i].SRV.GPUHandle);
 }
 
 // --------------------------------------------------------
@@ -277,21 +375,24 @@ void Game::CreateGeometry()
 		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
 		DirectX::XMFLOAT2(1.0f, 1.0f),
 		DirectX::XMFLOAT2(0.0f, 0.0f),
-		pipelineState, rockAlbedo, rockNormal, rockMetal, rockRoughness
+		refractionPSO, rockAlbedo, rockNormal, rockMetal, rockRoughness,
+		true
 	);
 
 	std::shared_ptr<Material> marbleMaterial = std::make_shared<Material>(
 		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
 		DirectX::XMFLOAT2(1.0f, 1.0f),
 		DirectX::XMFLOAT2(0.0f, 0.0f),
-		pipelineState, marbleAlbedo, marbleNormal, marbleMetal, marbleRoughness
+		pipelineState, marbleAlbedo, marbleNormal, marbleMetal, marbleRoughness,
+		false
 	);
 
 	std::shared_ptr<Material> woodMaterial = std::make_shared<Material>(
 		DirectX::XMFLOAT3(1.0f, 1.0f, 1.0f),
 		DirectX::XMFLOAT2(1.0f, 1.0f),
 		DirectX::XMFLOAT2(0.0f, 0.0f),
-		pipelineState,woodAlbedo,woodNormal, woodMetal, woodRoughness
+		pipelineState,woodAlbedo,woodNormal, woodMetal, woodRoughness,
+		false
 	);
 
 	// Actual entities
@@ -430,18 +531,32 @@ void Game::Draw(float deltaTime, float totalTime)
 
 	// Clearing the render target
 	{
-		// Transition the back buffer from present to render target
-		D3D12_RESOURCE_BARRIER rb = {};
+		D3D12_RESOURCE_BARRIER rb{};
 		rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		rb.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 		rb.Transition.pResource = currentBackBuffer.Get();
 		rb.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 		rb.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
 		rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
 		Graphics::CommandList->ResourceBarrier(1, &rb);
 
 		// Background color (Cornflower Blue in this case) for clearing
 		float color[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+
+		// clear the other render targets
+		for (unsigned int i = 0; i < 2; i++)
+		{
+			D3D12_RESOURCE_BARRIER rb{};
+			rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			rb.Transition.pResource = RenderTargets[i].Texture.Get();
+			rb.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+			rb.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+			Graphics::CommandList->ResourceBarrier(1, &rb);
+
+			Graphics::CommandList->ClearRenderTargetView(RenderTargets[i].RTV, color, 0, 0);
+		}
+
 
 		// Clear the RTV
 		Graphics::CommandList->ClearRenderTargetView(
@@ -468,7 +583,7 @@ void Game::Draw(float deltaTime, float totalTime)
 		Graphics::CommandList->SetGraphicsRootSignature(rootSignature.Get());
 		// Set up other commands for rendering
 		Graphics::CommandList->OMSetRenderTargets(
-			1, &Graphics::RTVHandles[Graphics::SwapChainIndex()], true, &Graphics::DSVHandle);
+			2, &RenderTargets[0].RTV, true, &Graphics::DSVHandle);
 		Graphics::CommandList->RSSetViewports(1, &viewport);
 		Graphics::CommandList->RSSetScissorRects(1, &scissorRect);
 		Graphics::CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -478,6 +593,10 @@ void Game::Draw(float deltaTime, float totalTime)
 		{
 			// Access material for easy use
 			std::shared_ptr<Material> m = e->GetMaterial();
+
+			// if material is refractive, skip!
+			if (m->GetRefractive())
+				continue;
 
 			// Fill out struct to send to the vertex shader
 			VertexShaderExternalData cbData = {};
@@ -522,22 +641,112 @@ void Game::Draw(float deltaTime, float totalTime)
 			// Finally call draw indexed
 			Graphics::CommandList->DrawIndexedInstanced(e->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
 		}
+
+		// render sky before presenting
+		sky->Draw(camera);
+
+		// switch over to back buffer
+		Graphics::CommandList->OMSetRenderTargets(1, &Graphics::RTVHandles[Graphics::SwapChainIndex()], true, &Graphics::DSVHandle);
+		Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
+
+		Graphics::CommandList->RSSetViewports(1, &viewport);
+		Graphics::CommandList->RSSetScissorRects(1, &scissorRect);
+
+		for (unsigned int i = 0; i < 2; i++)
+		{
+			D3D12_RESOURCE_BARRIER rb{};
+			rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+			rb.Transition.pResource = RenderTargets[i].Texture.Get();
+			rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+			rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+			rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+			Graphics::CommandList->ResourceBarrier(1, &rb);
+		}
+
+		// draw with fullscreen pso
+		FullScreenData fsData = {};
+		fsData.screenIndex = RenderTargets[0].SRV.GPUDescriptorIndex;
+
+		VertexShaderExternalData vsData = {};
+
+		D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&vsData, sizeof(vsData));
+		Graphics::CommandList->SetPipelineState(fullscreenPSO.Get());
+		Graphics::CommandList->SetGraphicsRootSignature(rootSignature.Get());
+		Graphics::CommandList->SetGraphicsRootDescriptorTable(0, gpuHandle);
+
+		gpuHandle = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&fsData, sizeof(fsData));
+		Graphics::CommandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+		Graphics::CommandList->DrawInstanced(3, 1, 0, 0);
+
+		// Descriptor heap set up
+		Graphics::CommandList->SetDescriptorHeaps(1, Graphics::CBVSRVDescriptorHeap.GetAddressOf());
+		// Root sig (must happen before root descriptor table)
+		Graphics::CommandList->SetGraphicsRootSignature(rootSignature.Get());
+
+		// draw refractive materials
+		for (auto& e : entities)
+		{
+			// grab material
+			std::shared_ptr<Material> m = e->GetMaterial();
+			
+			// skip over if not refractive
+			if (m->GetRefractive() == false)
+				continue;
+
+			// fill out PS struct to pass in the texture from previous render
+			RefractionData psData{};
+			psData.screenSize = DirectX::XMFLOAT2(Window::Width(), Window::Height());
+			psData.normalIndex = m->GetNormalMap();
+			psData.refractionScale = 10;
+			psData.screenIndex = RenderTargets[0].SRV.GPUDescriptorIndex;
+
+			// Grab both vertex and index buffer views from the mesh
+			D3D12_VERTEX_BUFFER_VIEW vbView = e->GetMesh()->GetVertexBufferView();
+			D3D12_INDEX_BUFFER_VIEW ibView = e->GetMesh()->GetIndexBufferView();
+
+			// its pixel shader's turn for the gpu handle!!
+			D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = Graphics::FillNextConstantBufferAndGetGPUDescriptorHandle(&psData, sizeof(psData));
+			Graphics::CommandList->SetGraphicsRootDescriptorTable(1, gpuHandle);
+
+			// Set both buffers
+			Graphics::CommandList->IASetVertexBuffers(0, 1, &vbView);
+			Graphics::CommandList->IASetIndexBuffer(&ibView);
+
+			// Change to the entities pso
+			Graphics::CommandList->SetPipelineState(m->GetPipelineState().Get());
+
+			// Finally call draw indexed
+			Graphics::CommandList->DrawIndexedInstanced(e->GetMesh()->GetIndexCount(), 1, 0, 0, 0);
+		}
+
 	}
 
-	// render sky before presenting
-	sky->Draw(camera);
-
-	// Present
+	// get render targets ready to present
+	for (unsigned int i = 0; i < 2; i++)
 	{
-		// Transition back to present
-		D3D12_RESOURCE_BARRIER rb = {};
+		D3D12_RESOURCE_BARRIER rb{};
 		rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 		rb.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		rb.Transition.pResource = currentBackBuffer.Get();
-		rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		rb.Transition.pResource = RenderTargets[i].Texture.Get();
+		rb.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 		rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 		rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 		Graphics::CommandList->ResourceBarrier(1, &rb);
+	}
+
+	// change back buffer to present
+	D3D12_RESOURCE_BARRIER rb{};
+	rb.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	rb.Transition.pResource = currentBackBuffer.Get();
+	rb.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	rb.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	rb.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	Graphics::CommandList->ResourceBarrier(1, &rb);
+
+
+	// Present
+	{
 		// Must occur BEFORE present
 		Graphics::CloseAndExecuteCommandList();
 		// Present the current back buffer and move to the next one

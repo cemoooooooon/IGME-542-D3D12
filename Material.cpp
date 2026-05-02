@@ -1,7 +1,7 @@
 #include "Material.h"
 
-Material::Material(DirectX::XMFLOAT3 colorTint, DirectX::XMFLOAT2 uvScale, DirectX::XMFLOAT2 uvOffset, Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState, unsigned int albedo, unsigned int normalMap, unsigned int metalness, unsigned int roughness) :
-	colorTint(colorTint), uvScale(uvScale), uvOffset(uvOffset), pipelineState(pipelineState), albedo(albedo), normalMap(normalMap), metalness(metalness), roughness(roughness)
+Material::Material(DirectX::XMFLOAT3 colorTint, DirectX::XMFLOAT2 uvScale, DirectX::XMFLOAT2 uvOffset, Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState, unsigned int albedo, unsigned int normalMap, unsigned int metalness, unsigned int roughness, bool refractive) :
+	colorTint(colorTint), uvScale(uvScale), uvOffset(uvOffset), pipelineState(pipelineState), albedo(albedo), normalMap(normalMap), metalness(metalness), roughness(roughness), isRefractive(refractive)
 {
 
 }
@@ -44,6 +44,11 @@ unsigned int Material::GetMetalness()
 unsigned int Material::GetRoughness()
 {
 	return roughness;
+}
+
+unsigned int Material::GetRefractive()
+{
+	return isRefractive;
 }
 
 void Material::SetColorTint(DirectX::XMFLOAT3 colorTint)

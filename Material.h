@@ -7,7 +7,7 @@
 class Material
 {
 public:
-	Material(DirectX::XMFLOAT3 colorTint, DirectX::XMFLOAT2 uvScale, DirectX::XMFLOAT2 uvOffset, Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState, unsigned int albedo, unsigned int normalMap, unsigned int metalness, unsigned int roughness);
+	Material(DirectX::XMFLOAT3 colorTint, DirectX::XMFLOAT2 uvScale, DirectX::XMFLOAT2 uvOffset, Microsoft::WRL::ComPtr<ID3D12PipelineState> pipelineState, unsigned int albedo, unsigned int normalMap, unsigned int metalness, unsigned int roughness, bool refractive);
 
 	// Getters
 	DirectX::XMFLOAT3 GetColorTint();
@@ -18,6 +18,7 @@ public:
 	unsigned int GetNormalMap();
 	unsigned int GetMetalness();
 	unsigned int GetRoughness();
+	unsigned int GetRefractive();
 
 	// Setters
 	void SetColorTint(DirectX::XMFLOAT3 colorTint);
@@ -40,5 +41,7 @@ private:
 	unsigned int normalMap;
 	unsigned int metalness;
 	unsigned int roughness;
+
+	bool isRefractive;
 };
 

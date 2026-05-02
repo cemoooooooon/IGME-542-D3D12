@@ -23,6 +23,19 @@ struct PixelShaderExternalData
 	Light lights[4];
 };
 
+struct FullScreenData
+{
+	unsigned int screenIndex;
+};
+
+struct RefractionData
+{
+	DirectX::XMFLOAT2 screenSize;
+	unsigned int normalIndex;
+	unsigned int refractionScale;
+	unsigned int screenIndex;
+};
+
 // simplified struct that will send data for skyboxes
 struct PerFrameData
 {

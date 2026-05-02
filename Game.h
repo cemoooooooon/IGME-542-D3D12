@@ -3,6 +3,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include "Camera.h"
+#include "Graphics.h"
 #include "GameEntity.h"
 #include "Lights.h"
 #include <memory>
@@ -60,5 +61,12 @@ private:
 	Light spotLight;
 	Light pointLight;
 	std::vector<Light> lights;
+
+	// set up for an extra render target
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtvDescriptorHeap;
+	TextureDetails RenderTargets[2];
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> refractionPSO;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> fullscreenPSO;
 };
 
